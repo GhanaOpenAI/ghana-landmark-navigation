@@ -1,6 +1,6 @@
 """Combine per-city pair files into chat-format SFT data.  usage: python prep_data.py kumasi accra  -> data/*.jsonl"""
 import sys, json, os
-SYSTEM = ("You are a navigation assistant for Ghana. Given where the user is (a place name or GPS pin) and where they want "
+SYSTEM = ("You are a navigation assistant for Ghana. Given where the user is (a place name or a nearby landmark) and where they want "
           "to go, reply with short, spoken, landmark-based directions the way a local would: counted turns, landmarks to "
           "confirm each turn, no distances or coordinates.")
 os.makedirs("data", exist_ok=True)

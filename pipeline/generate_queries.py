@@ -8,6 +8,8 @@ import sys, os, json, random, time, threading, concurrent.futures as cf
 from collections import Counter
 import requests
 from factcheck import check, index
+import re
+STYLE_LEAK = re.compile(r"\bGPS\b|^(formal|rushed|casual|polite|informal|short)\s*:|yes/no check|\bnames only\b|\b[AB] (and|to) [AB]\b|<[^>]+>", re.I)
 
 CITY = sys.argv[1]; LIMIT = int(sys.argv[2]) if len(sys.argv) > 2 else 10**9
 MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
@@ -16,41 +18,41 @@ URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generate
 N = 5
 
 ROUTE_STYLES = [
-    "names only (no coordinates), casual, like a Ghanaian texting",
-    "start as GPS coordinates (lat, lon) copied exactly from FACTS, destination by name",
-    "both start and destination as GPS coordinates copied exactly from FACTS, nothing else",
-    "start by name with its coordinates, destination by name; formal and polite",
+    "names only, casual, like a Ghanaian texting",
+    "start by name with its neighbourhood, destination by name",
+    "start by name, destination by name with its neighbourhood",
+    "start and destination by name; formal and polite",
     "short, rushed, informal but plain English (names only)",
-    "mentions only the area/neighbourhood of the start as context, plus the destination name",
+    "mentions only the neighbourhood of the start as context, plus the destination name",
     "asks how to get there by car, names only",
 ]
 STYLES = {
     "route": ROUTE_STYLES, "reverse": ROUTE_STYLES,
-    "short_hop": ["names only, asks if it is close / how to walk there", "names only, rushed",
-                  "start and destination as GPS coordinates copied exactly", "formal, names with coordinates",
-                  "informal, names only"],
-    "gps_start": ["only the start coordinates (exactly as in FACTS, 5 decimals) + destination name",
-                  "'I'm at <lat>, <lon>' sentence + destination name", "pasted location pin text + destination",
-                  "formal, with coordinates + destination", "rushed, coordinates + destination, informal"],
+    "short_hop": ["names only, asks if it is close / how to walk there", "names only, rushed", "asks how to walk, naming both places and their neighbourhoods", "formal, names only", "informal, names only"],
+    "gps_start": ["says they are near the nearest landmark from FACTS and asks how to get to the destination", "describes where they are using the nearest landmark and the neighbourhood, then names the destination", "polite: they are close to the nearest landmark and need directions to the destination", "short and rushed: near the nearest landmark, going to the destination", "says they are in the neighbourhood next to the nearest landmark and asks the way to the destination"],
     "avoid_landmark": ["traffic/jam at the avoided place, asks for another way", "road blocked at the avoided place",
                        "'I don't want to pass X' phrasing", "polite request for an alternative that skips X",
                        "rushed, informal, avoid X"],
     "avoid_road": ["that road is blocked/bad, want another way", "'avoid <road>' phrasing",
                    "traffic on the road, asks alternative", "polite request not to use the road",
                    "rushed, informal, not that road"],
-    "nearby": ["what is around me / near this place", "which landmarks are close to here", "formal: places nearby",
-               "rushed, informal: what is around here", "wants to know what to look out for around this point"],
-    "connects:link": ["what will I pass between A and B", "how are A and B connected", "main roads/landmarks from A to B",
-                      "formal: what is the general way from A to B", "rushed: major landmarks A to B (plain English)"],
-    "connects:on_the_way": ["is <question_landmark> on the way from A to B?", "will I pass <question_landmark> going A to B?",
-                            "formal: does the route from A to B go by <question_landmark>?",
-                            "rushed, informal: is <question_landmark> on the way?", "casual yes/no check on <question_landmark>"],
+    "nearby": ["asks what is near the place named in FACTS, naming it (if no place is named, uses the neighbourhood)", "asks what is around them, saying where they are by place name or neighbourhood", "polite request for landmarks around that place or neighbourhood", "short and casual: what is around that place or neighbourhood", "asks which landmarks to look out for around that place or neighbourhood"],
+    "connects:link": ["asks what they will pass between the start and the destination, naming both",
+                      "asks how the start and the destination are connected, naming both",
+                      "asks for the main roads and landmarks from the start to the destination",
+                      "polite question about the general way from the start to the destination",
+                      "short and rushed, names both places and asks for the major landmarks"],
+    "connects:on_the_way": ["asks whether the question landmark is on the way from the start to the destination, naming all three",
+                            "asks whether they will pass the question landmark going from the start to the destination",
+                            "polite question: does the route from the start to the destination go by the question landmark",
+                            "short and rushed: is the question landmark on the way, naming start and destination",
+                            "casual yes/no question about the question landmark on that trip, naming start and destination"],
 }
 DESC = {
     "route": "Give driving directions from the start to the destination.",
     "reverse": "Give driving directions from the start to the destination (this is the return leg of another trip).",
     "short_hop": "This is a very short trip (a few minutes). Give brief directions in 1-2 sentences.",
-    "gps_start": "The user only knows their GPS position (start has no name). First orient them using start.near (the nearest landmark, with its distance/direction), then give the directions.",
+    "gps_start": "The user is not at a named place: they are near the landmark given as the nearest landmark to the start. First orient them with that landmark ('you are near ...'), then give the directions.",
     "avoid_landmark": "The user wants a different route that avoids {a}. The FACTS route is the ALTERNATIVE that avoids it: say you are avoiding it, then give these directions. Never route through {a}.",
     "avoid_road": "The user wants a different route that does not use {a}. The FACTS route is the ALTERNATIVE: say you are avoiding it, then give these directions. Never use {a}.",
     "nearby": "Tell the user the landmarks around their position, closest first, using relative wording (right beside, a short walk away). Use FACTS 'nearby' only. 3-5 landmarks in 1-3 sentences.",
@@ -69,6 +71,8 @@ Rules for every "output":
 - Counted turns ("take the second left") must match FACTS exactly. When FACTS say "many small roads", don't count: use a landmark instead ("keep going till you reach ...").
 - Reinforce each turn with a landmark the user will SEE there, so they know it is the right turn. Use the landmarks listed in FACTS (keep exact name and side). Where FACTS say NONE, use your own knowledge of {city} to name a well-known landmark that you believe is really at or right next to that junction; if you do not know, guide the user as best you can with the counted turn, the road name and a natural hedge ("if you're not sure, ask someone for ..."). Never contradict FACTS.
 - Do not invent road names: use only the roads in FACTS.
+- NEVER use GPS coordinates or any numeric location, in the "input" or the "output". Describe locations only with place names, landmarks and neighbourhoods.
+- Each "input" must read like a real message a person typed, using the ACTUAL place names or neighbourhood from FACTS. Never write placeholders such as "A", "B" or "<...>", and never write the style description or labels like "formal:", "casual:", "rushed:". An input that asks for nearby places or a link between places must say where (place name or neighbourhood).
 - Vary wording between examples. Use simple, plain English that anyone can understand. Do NOT use pidgin, slang or Ghanaian-pidgin words (no "abeg", "dey", "chale", "oale", "you go see", etc.), in either the input or the output.
 - "places_used": the road names written in "output", exactly as in FACTS.
 
@@ -79,7 +83,7 @@ Return a JSON array of {n} objects with keys "input", "output", "places_used".""
 
 
 def place(p):
-    return p["name"] or f"unknown place (GPS {p['lat']}, {p['lon']}; area {p['area']})"
+    return p["name"] or f"a spot in {p['area']}"
 
 
 NEAR_WORD = lambda d: "right beside it" if d < 60 else "a short walk away" if d < 250 else "a bit further on"
@@ -87,9 +91,14 @@ NEAR_WORD = lambda d: "right beside it" if d < 60 else "a short walk away" if d 
 
 def render_facts(sc):
     s, e = sc["start"], sc.get("end")
-    L = [f"City: {sc['city']}", f"Start: {place(s)} [{s['type']}], area {s['area']}" + (f", GPS pin {s['lat']}, {s['lon']}" if s["name"] is None else f" (GPS {s['lat']}, {s['lon']})")]
-    if s.get("near"): L.append(f"Nearest landmark to the start: {s['near']['name']} ({NEAR_WORD(s['near']['dist_m'])})")
-    if e: L.append(f"Destination: {e['name']} [{e['type']}], area {e['area']} (GPS {e['lat']}, {e['lon']})")
+    L = [f"City: {sc['city']}"]
+    if s["name"] is None and s.get("near"):
+        L.append(f"Start: a spot near {s['near']['name']} ({NEAR_WORD(s['near']['dist_m'])}), neighbourhood {s['area']}")
+    elif s["name"] is None:
+        L.append(f"Position: in the neighbourhood {s['area']}")
+    else:
+        L.append(f"Start: {s['name']} [{s['type']}], neighbourhood {s['area']}")
+    if e: L.append(f"Destination: {e['name']} [{e['type']}], neighbourhood {e['area']}")
     if sc.get("nearby"):
         L.append("Nearby landmarks (closest first):"); L += [f"- {n['name']} ({n['type']}), {NEAR_WORD(n['dist_m'])}" for n in sc["nearby"]]
     if sc.get("avoid"): L.append(f"User wants to avoid {sc['avoid']['kind']}: {sc['avoid']['name']} (the route below avoids it)")
@@ -137,6 +146,9 @@ def gen(sc):
             for x in arr:
                 if not isinstance(x, dict): continue
                 why = check(sc, x, ix)
+                inp = str(x.get("input", ""))
+                if not why and STYLE_LEAK.search(inp): why = "style_leak"
+                if not why and sc["task"] == "nearby" and not any(v and v.lower() in inp.lower() for v in (sc["start"].get("name"), sc["start"].get("area"))): why = "no_location"
                 if not why and x["input"].strip().lower() in seen: why = "duplicate"
                 row = dict(id=sc["id"], task=sc["task"], split=sc["split"], city=sc["city"], input=x.get("input"),
                            output=x.get("output"), start=sc["start"]["name"], end=(sc["end"] or {}).get("name"))

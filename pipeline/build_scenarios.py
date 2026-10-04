@@ -31,10 +31,12 @@ def split_of(sc):
     return "train"
 
 
+import time; T0 = time.time()
 names = list(TASKS); weights = [TASKS[n][1] for n in names]
 out, seen, tries = [], set(), 0
 while len(out) < N and tries < N * 60:
     tries += 1
+    if tries % 2000 == 0: print(f"  {len(out)}/{N} scenarios, {tries} tries, {time.time()-T0:.0f}s elapsed, ETA ~{(time.time()-T0)/max(len(out),1)*(N-len(out)):.0f}s", flush=True)
     for sc in TASKS[rnd.choices(names, weights)[0]][0](w, rnd):
         key = (sc["task"], tuple(sc["pair"]), sc.get("avoid", {}).get("name"), sc.get("question_landmark"),
                sc["start"].get("lat") if sc["start"].get("name") is None else None)

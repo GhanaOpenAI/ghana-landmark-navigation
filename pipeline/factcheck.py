@@ -85,8 +85,7 @@ def check(sc, row, idx=None):
         if not ok and len(words) >= 2 and not all(norm(x) in keyw for x in words): return "road_undeclared"
     if DIST_RE.search(out): return "has_distance"          # locals don't say km/metres: keep answers relative
     if COORD_RE.search(out): return "coord_in_output"
-    for c in COORD_RE.findall(inp):                         # coordinates in the INPUT must be the scenario's
-        if not any(abs(float(c) - x) <= 0.0006 for x in coords): return "coord"
+    if COORD_RE.search(inp): return "coord_in_input"          # no GPS anywhere: landmarks only
     for m in ORD_RE.finditer(out):                          # "second left" must be a real numbered turn
         if (m.group(1).lower(), m.group(2).lower()) not in ords: return "ordinal"
     if re.search(r"\b(fourth|fifth|sixth|seventh|4th|5th|6th)\s+(left|right|turn|junction|road)", out, re.I): return "ordinal"

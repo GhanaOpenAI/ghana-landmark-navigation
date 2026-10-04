@@ -1,5 +1,11 @@
 # Ghana Landmark Navigation
 
+**Author:** [Ghana Open AI](https://huggingface.co/ghanaopenai)
+
+**Supported by** [Ghana NLP](https://ghananlp.org)
+
+**Dataset:** [`ghanaopenai/ghana-landmark-navigation`](https://huggingface.co/datasets/ghanaopenai/ghana-landmark-navigation) on Hugging Face (291,412 request/answer pairs for Accra and Kumasi).
+
 Pipeline for building a training dataset of **landmark-based, spoken-style directions for Ghana** (currently Accra and Kumasi), and for training and evaluating small language models on it.
 
 People in Ghana rarely give directions as coordinates and kilometres. They say *"after the market, take the second left — you'll see the petrol station on your right, that's how you know it's the right turn."* This project turns real map data into that style of text, grounded in facts from a road graph.
@@ -24,13 +30,13 @@ OpenStreetMap extract + filtered Foursquare places
 **Scenario facts come from the graph, not from the LLM.** Gemini only turns the skeleton into natural wording. Each step carries the road, which numbered turn it is ("second left", only up to three), how many side roads are skipped, and the landmarks visible at the turn with their side of the road.
 
 ### Task types
-`route`, `reverse`, `short_hop`, `avoid_landmark`, `avoid_road`, `gps_start` (GPS pin input), `nearby`, `connects` (link / "is X on the way?"). Add a new one with `@task(name, weight)` in `pipeline/tasks.py`.
+`route`, `reverse`, `short_hop`, `avoid_landmark`, `avoid_road`, `gps_start` (user is near a landmark, not at a named place), `nearby`, `connects` (link / "is X on the way?"). Add a new one with `@task(name, weight)` in `pipeline/tasks.py`.
 
 ### Style rules for the generated answers
-Simple plain English (no pidgin), spoken style, **no distances in numbers and no coordinates in answers** (coordinates appear only in user inputs, as a phone GPS pin would give). Where the map has no landmark at a turn, the answer relies on the counted turn and a natural hedge instead of inventing one.
+Simple plain English (no pidgin), spoken style, **no distances in numbers and no GPS coordinates anywhere in the text**, inputs included (people are located by place name, neighbourhood or nearby landmark). Where the map has no landmark at a turn, the answer relies on the counted turn and a natural hedge instead of inventing one.
 
 ### Fact-check (`factcheck.py`)
-Drops generated pairs that: name a road not in the facts; state a numbered turn the route doesn't have; use a left/right or compass word the route doesn't contain; include distances or coordinates in the answer; are over-long or duplicates; or route through a place the user asked to avoid. Landmarks are **not** validated against OSM (the map is incomplete and Gemini is allowed to add well-known ones).
+Drops generated pairs that: contain coordinates or the word GPS; name a road not in the facts; state a numbered turn the route doesn't have; use a left/right or compass word the route doesn't contain; include distances or coordinates in the answer; are over-long or duplicates; or route through a place the user asked to avoid. Landmarks are **not** validated against OSM (the map is incomplete and Gemini is allowed to add well-known ones).
 
 ## Running it
 
@@ -45,7 +51,7 @@ python fsq_ghana.py
 # 3. scenarios
 python build_scenarios.py kumasi 32000
 # 4. natural language (needs GEMINI_API_KEY in the environment or a .env file; never commit it)
-WORKERS=32 python generate_queries.py kumasi
+WORKERS=32 python generate_queries.py kumasi      # resumable; clean_leaks.py re-queues scenarios with bad inputs
 # 5. training data + bake-off (GPU)
 cd ../train && python prep_data.py kumasi accra && LIMIT=3000 EVAL_N=200 TAG=bo ./bakeoff.sh
 ```
@@ -66,4 +72,7 @@ cd ../train && python prep_data.py kumasi accra && LIMIT=3000 EVAL_N=200 TAG=bo 
 - Held-out `test_pair` splits hold out start/end pairs, not street segments, so segments overlap with training; `test_area` (whole neighbourhoods held out) is the honest generalisation test.
 
 ## Status
-Dataset generation for Accra and Kumasi is in progress. The published dataset will live on Hugging Face under `ghanaopenai`.
+The dataset is published: 261,007 train, 16,716 `test_area` and 13,689 `test_pair` pairs (Accra and Kumasi, 32,000 scenarios each). `pipeline/build_hf.py` assembles the Hugging Face release. Training work (router + verbaliser) is next.
+
+---
+Built by [Ghana Open AI](https://huggingface.co/ghanaopenai), supported by [Ghana NLP](https://ghananlp.org).
