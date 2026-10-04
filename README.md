@@ -57,6 +57,9 @@ cd ../train && python prep_data.py kumasi accra && LIMIT=3000 EVAL_N=200 TAG=bo 
 - Direction of travel: use a **router + verbaliser** design. The graph produces the route skeleton at inference time and a small model (0.5–1B) writes the directions, so the model does not have to memorise street layouts.
 - Gemini with the Google Maps grounding tool is a place lookup, not a router: it refused or invented turn-by-turn directions, so it is not used as a route source.
 
+## Licence
+The code in this repository is released under the [MIT License](LICENSE). The published dataset has its own licence (ODbL, because it is derived from OpenStreetMap); see the dataset card on Hugging Face.
+
 ## Data sources and licences
 - Road graph and landmarks: © OpenStreetMap contributors, **ODbL** — derived data needs attribution and share-alike.
 - Extra landmarks: [Foursquare OS Places](https://huggingface.co/datasets/foursquare/fsq-os-places), **Apache-2.0**, filtered (open places only, plausible categories, de-duplicated against OSM). Entries are tagged `source=foursquare`; some are old (refreshed 2012–2019).
