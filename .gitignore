@@ -1,0 +1,19 @@
+# secrets
+.env
+*.env
+# large / generated data (published separately on Hugging Face)
+*.pbf
+*.parquet
+*.pkl
+*.jsonl
+*.csv
+*.log
+*.done
+data/
+runs/
+results/
+snap*/
+old_*/
+fresh/
+__pycache__/
+.venv/

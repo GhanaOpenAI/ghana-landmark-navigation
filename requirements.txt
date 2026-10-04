@@ -1,0 +1,18 @@
+# data pipeline
+osmium
+networkx
+numpy
+pandas
+pyarrow
+rapidfuzz
+requests
+huggingface_hub
+# training / evaluation (train/)
+torch
+transformers
+peft
+accelerate
+datasets
+flash-linear-attention
+sentencepiece
+protobuf
