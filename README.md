@@ -1,9 +1,5 @@
 # Ghana Landmark Navigation
 
-**Author:** [Ghana Open AI](https://huggingface.co/ghanaopenai)
-
-**Supported by** [Ghana NLP](https://ghananlp.org)
-
 **Dataset:** [`ghanaopenai/ghana-landmark-navigation`](https://huggingface.co/datasets/ghanaopenai/ghana-landmark-navigation) on Hugging Face (291,412 request/answer pairs for Accra and Kumasi).
 
 Pipeline for building a training dataset of **landmark-based, spoken-style directions for Ghana** (currently Accra and Kumasi), and for training and evaluating small language models on it.
@@ -73,6 +69,3 @@ cd ../train && python prep_data.py kumasi accra && LIMIT=3000 EVAL_N=200 TAG=bo 
 
 ## Status
 The dataset is published: 261,007 train, 16,716 `test_area` and 13,689 `test_pair` pairs (Accra and Kumasi, 32,000 scenarios each). `pipeline/build_hf.py` assembles the Hugging Face release. Training work (router + verbaliser) is next.
-
----
-Built by [Ghana Open AI](https://huggingface.co/ghanaopenai), supported by [Ghana NLP](https://ghananlp.org).
